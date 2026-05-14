@@ -2,16 +2,21 @@ package com.gymapp.ms_tienda.dto;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class VentaRequestDTO {
-    @NotNull(message = "Producto requerido")
-    private Long productoId;
 
-    @NotNull(message = "Miembro requerido")
+    @NotNull(message = "El ID del miembro es obligatorio")
     private Long miembroId;
 
-    @Min(value = 1, message = "Mínimo 1 unidad")
+    @NotNull(message = "El ID del producto es obligatorio")
+    private Long productoId;
+
+    @Min(value = 1, message = "La cantidad mínima de compra es 1")
     private int cantidad;
 }

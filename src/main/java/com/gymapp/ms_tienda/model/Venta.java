@@ -9,14 +9,29 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "ventas")
-@Data @NoArgsConstructor @AllArgsConstructor
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class Venta {
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(nullable = false)
     private Long productoId;
+
+    @Column(nullable = false)
     private Long miembroId;
+
+    @Column(nullable = false)
     private int cantidad;
+
+
+    @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal total;
-    private LocalDateTime fechaVenta;
+
+
+    @Column(nullable = false, updatable = false)
+    private LocalDateTime fechaVenta = LocalDateTime.now();
 }

@@ -8,17 +8,25 @@ import java.math.BigDecimal;
 
 @Entity
 @Table(name = "productos")
-@Data @NoArgsConstructor @AllArgsConstructor
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
 public class Producto {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true, nullable = false)
+    @Column(unique = true, nullable = false, length = 100)
     private String nombre;
 
+    @Column(length = 255)
     private String descripcion;
+
+    @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal precio;
+
+    @Column(nullable = false)
     private int stock;
+
     private boolean activo = true;
 }
