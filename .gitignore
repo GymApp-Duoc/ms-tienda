@@ -1,0 +1,40 @@
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+### Seguridad y Credenciales ###
+# Ignorar archivos de logs generados por SLF4J
+*.log
+
+# IMPORTANTE: Ignorar application.properties para no subir la contraseña ni el secreto JWT a GitHub
+src/main/resources/application.properties
+>>>>>>> ba6528f (feat: estructura ms-clases con seguridad jwt y flyway)
