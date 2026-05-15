@@ -30,7 +30,7 @@ public class TiendaServiceImpl implements TiendaService {
     private final ProductoRepository productoRepo;
     private final VentaRepository ventaRepo;
 
-    // Clientes Feign
+
     private final MiembroClient miembroClient;
     private final GamificacionClient gamificacionClient;
     private final NotificacionClient notificacionClient;
@@ -47,7 +47,6 @@ public class TiendaServiceImpl implements TiendaService {
         if (producto.getStock() < dto.getCantidad()) {
             throw new BusinessException("Stock insuficiente. Disponible: " + producto.getStock());
         }
-
 
         validarMiembroExterno(dto.getMiembroId());
 
@@ -67,15 +66,62 @@ public class TiendaServiceImpl implements TiendaService {
         return mapearAResponse(guardada);
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public List<Producto> listarProductosActivos() {
+        log.info("Consultando todos los productos activos en catálogo");
+        return productoRepo.findAll().stream()
+                .filter(Producto::isActivo)
+                .toList();
+    }
+
+    @Override
+    @Transactional
+    public void reponerStock(Long id, int cantidad) {
+        Producto p = productoRepo.findById(id)
+                .orElseThrow(() -> new BusinessException("No se encontró el producto ID " + id + " para reponer stock"));
+
+        p.setStock(p.getStock() + cantidad);
+        productoRepo.save(p);
+        log.info("Stock actualizado exitosamente para {}. Cantidad sumada: {}. Stock total: {}", p.getNombre(), cantidad, p.getStock());
+    }
+
+    @Override
+    @Transactional
+    public void eliminarProducto(Long id) {
+        Producto p = productoRepo.findById(id)
+                .orElseThrow(() -> new BusinessException("Producto no encontrado para eliminar."));
+
+        if (!ventaRepo.findByProductoId(id).isEmpty()) {
+
+            p.setActivo(false);
+            productoRepo.save(p);
+            log.info("Producto ID {} desactivado (borrado lógico) debido a historial de ventas existente.", id);
+        } else {
+
+            productoRepo.delete(p);
+            log.info("Producto ID {} eliminado físicamente del sistema.", id);
+        }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Venta> obtenerHistorial(Long miembroId) {
+        log.info("Consultando historial de ventas para el miembro ID: {}", miembroId);
+        return ventaRepo.findByMiembroIdOrderByFechaVentaDesc(miembroId);
+    }
+
+
+
     private void validarMiembroExterno(Long id) {
         try {
             Boolean esValido = miembroClient.validarMiembro(id);
             if (esValido == null || !esValido) {
-                throw new BusinessException("La venta no puede procesarse: El miembro no está autorizado.");
+                throw new BusinessException("La venta no puede procesarse: El miembro no está autorizado o no existe.");
             }
         } catch (FeignException e) {
-            log.error("Error de conexión con MS-MIEMBROS: {}", e.getMessage());
-            throw new BusinessException("Servicio de validación de miembros no disponible.");
+            log.error("Error de conexión con MS-MIEMBROS a través de Feign: {}", e.getMessage());
+            throw new BusinessException("Servicio de validación de miembros temporalmente no disponible.");
         }
     }
 
@@ -87,7 +133,7 @@ public class TiendaServiceImpl implements TiendaService {
             evento.put("accion", "COMPRA_TIENDA");
             evento.put("puntosBase", 50);
             gamificacionClient.enviarEvento(evento);
-            log.info("Puntos de gamificación solicitados para el miembro {}", miembroId);
+            log.info("Evento de gamificación enviado para miembro {}", miembroId);
         } catch (Exception e) {
             log.warn("No se pudieron otorgar puntos al miembro {}: {}", miembroId, e.getMessage());
         }
@@ -97,34 +143,12 @@ public class TiendaServiceImpl implements TiendaService {
             Map<String, Object> noti = new HashMap<>();
             noti.put("miembroId", miembroId);
             noti.put("titulo", "¡Compra Exitosa!");
-            noti.put("mensaje", "Tu pedido de " + nombreProducto + " está listo para retiro.");
+            noti.put("mensaje", "Tu pedido de " + nombreProducto + " ya está registrado.");
             notificacionClient.enviarNotificacion(noti);
-            log.info("Notificación de compra despachada.");
+            log.info("Notificación de compra enviada exitosamente.");
         } catch (Exception e) {
-            log.warn("Fallo al enviar notificación de compra.");
+            log.warn("Fallo el envío de notificación de compra para el miembro {}.", miembroId);
         }
-    }
-
-    @Override
-    @Transactional
-    public void eliminarProducto(Long id) {
-        Producto p = productoRepo.findById(id)
-                .orElseThrow(() -> new BusinessException("Producto no encontrado para eliminar."));
-
-        if (!ventaRepo.findByProductoId(id).isEmpty()) {
-            p.setActivo(false);
-            productoRepo.save(p);
-            log.info("Producto ID {} desactivado (borrado lógico) por tener historial de ventas.", id);
-        } else {
-            productoRepo.delete(p);
-            log.info("Producto ID {} eliminado físicamente.", id);
-        }
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<Venta> obtenerHistorial(Long miembroId) {
-        return ventaRepo.findByMiembroIdOrderByFechaVentaDesc(miembroId);
     }
 
     private VentaResponseDTO mapearAResponse(Venta v) {
