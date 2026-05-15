@@ -1,17 +1,20 @@
 package com.gymapp.ms_tienda.service;
 
+import com.gymapp.ms_tienda.client.GamificacionClient;
+import com.gymapp.ms_tienda.client.MiembroClient;
+import com.gymapp.ms_tienda.client.NotificacionClient;
 import com.gymapp.ms_tienda.dto.VentaRequestDTO;
 import com.gymapp.ms_tienda.dto.VentaResponseDTO;
+import com.gymapp.ms_tienda.exception.BusinessException;
 import com.gymapp.ms_tienda.model.Producto;
 import com.gymapp.ms_tienda.model.Venta;
 import com.gymapp.ms_tienda.repository.ProductoRepository;
 import com.gymapp.ms_tienda.repository.VentaRepository;
+import feign.FeignException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -26,33 +29,30 @@ public class TiendaServiceImpl implements TiendaService {
 
     private final ProductoRepository productoRepo;
     private final VentaRepository ventaRepo;
-    private final RestTemplate restTemplate;
 
-    @Value("${ms.miembros.url}")
-    private String miembrosUrl;
-
-    @Value("${ms.gamificacion.url}")
-    private String gamificacionUrl;
-
-
-    @Value("${ms.notificaciones.url}")
-    private String notificacionesUrl;
+    // Clientes Feign
+    private final MiembroClient miembroClient;
+    private final GamificacionClient gamificacionClient;
+    private final NotificacionClient notificacionClient;
 
     @Override
     @Transactional
     public VentaResponseDTO procesarVenta(VentaRequestDTO dto) {
+        log.info("Iniciando proceso de venta para el producto ID: {} y miembro ID: {}", dto.getProductoId(), dto.getMiembroId());
 
         Producto producto = productoRepo.findById(dto.getProductoId())
                 .filter(Producto::isActivo)
-                .orElseThrow(() -> new RuntimeException("Producto no disponible o inexistente"));
+                .orElseThrow(() -> new BusinessException("El producto solicitado no está disponible o no existe."));
 
         if (producto.getStock() < dto.getCantidad()) {
-            throw new RuntimeException("Sin stock suficiente para " + producto.getNombre());
+            throw new BusinessException("Stock insuficiente. Disponible: " + producto.getStock());
         }
+
 
         validarMiembroExterno(dto.getMiembroId());
 
         BigDecimal total = producto.getPrecio().multiply(BigDecimal.valueOf(dto.getCantidad()));
+
 
         producto.setStock(producto.getStock() - dto.getCantidad());
         productoRepo.save(producto);
@@ -62,65 +62,79 @@ public class TiendaServiceImpl implements TiendaService {
         Venta guardada = ventaRepo.save(venta);
 
 
+        notificarSistemasExternos(dto.getMiembroId(), producto.getNombre());
+
+        return mapearAResponse(guardada);
+    }
+
+    private void validarMiembroExterno(Long id) {
+        try {
+            Boolean esValido = miembroClient.validarMiembro(id);
+            if (esValido == null || !esValido) {
+                throw new BusinessException("La venta no puede procesarse: El miembro no está autorizado.");
+            }
+        } catch (FeignException e) {
+            log.error("Error de conexión con MS-MIEMBROS: {}", e.getMessage());
+            throw new BusinessException("Servicio de validación de miembros no disponible.");
+        }
+    }
+
+    private void notificarSistemasExternos(Long miembroId, String nombreProducto) {
+
         try {
             Map<String, Object> evento = new HashMap<>();
-            evento.put("miembroId", dto.getMiembroId());
+            evento.put("miembroId", miembroId);
             evento.put("accion", "COMPRA_TIENDA");
             evento.put("puntosBase", 50);
-
-            restTemplate.postForObject(gamificacionUrl + "/api/gamificacion/eventos", evento, Object.class);
-            log.info("Evento enviado a Gamificación exitosamente.");
+            gamificacionClient.enviarEvento(evento);
+            log.info("Puntos de gamificación solicitados para el miembro {}", miembroId);
         } catch (Exception e) {
-            log.error("Aviso: No se pudieron enviar los puntos a Gamificación. {}", e.getMessage());
+            log.warn("No se pudieron otorgar puntos al miembro {}: {}", miembroId, e.getMessage());
         }
 
 
         try {
-            Map<String, Object> notificacion = new HashMap<>();
-            notificacion.put("miembroId", dto.getMiembroId());
-            notificacion.put("titulo", "¡Compra Exitosa!");
-            notificacion.put("mensaje", "Tu pedido de " + producto.getNombre() + " está listo para ser retirado en recepción.");
-
-            restTemplate.postForObject(notificacionesUrl + "/api/notificaciones", notificacion, Object.class);
-            log.info("Notificación de compra enviada exitosamente al miembro {}.", dto.getMiembroId());
+            Map<String, Object> noti = new HashMap<>();
+            noti.put("miembroId", miembroId);
+            noti.put("titulo", "¡Compra Exitosa!");
+            noti.put("mensaje", "Tu pedido de " + nombreProducto + " está listo para retiro.");
+            notificacionClient.enviarNotificacion(noti);
+            log.info("Notificación de compra despachada.");
         } catch (Exception e) {
-            log.error("Aviso: No se pudo enviar la notificación de compra. {}", e.getMessage());
+            log.warn("Fallo al enviar notificación de compra.");
         }
-
-
-        return VentaResponseDTO.builder()
-                .id(guardada.getId())
-                .productoId(guardada.getProductoId())
-                .miembroId(guardada.getMiembroId())
-                .cantidad(guardada.getCantidad())
-                .total(guardada.getTotal())
-                .fechaVenta(guardada.getFechaVenta())
-                .build();
     }
 
     @Override
     @Transactional
     public void eliminarProducto(Long id) {
-        Producto p = productoRepo.findById(id).orElseThrow();
+        Producto p = productoRepo.findById(id)
+                .orElseThrow(() -> new BusinessException("Producto no encontrado para eliminar."));
+
         if (!ventaRepo.findByProductoId(id).isEmpty()) {
             p.setActivo(false);
             productoRepo.save(p);
+            log.info("Producto ID {} desactivado (borrado lógico) por tener historial de ventas.", id);
         } else {
             productoRepo.delete(p);
-        }
-    }
-
-    private void validarMiembroExterno(Long id) {
-        try {
-            Boolean ok = restTemplate.getForObject(miembrosUrl + "/api/miembros/validar/" + id, Boolean.class);
-            if (ok == null || !ok) throw new RuntimeException("Miembro no autorizado");
-        } catch (Exception e) {
-            throw new RuntimeException("Error al conectar con MS-MIEMBROS");
+            log.info("Producto ID {} eliminado físicamente.", id);
         }
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<Venta> obtenerHistorial(Long miembroId) {
         return ventaRepo.findByMiembroIdOrderByFechaVentaDesc(miembroId);
+    }
+
+    private VentaResponseDTO mapearAResponse(Venta v) {
+        return VentaResponseDTO.builder()
+                .id(v.getId())
+                .productoId(v.getProductoId())
+                .miembroId(v.getMiembroId())
+                .cantidad(v.getCantidad())
+                .total(v.getTotal())
+                .fechaVenta(v.getFechaVenta())
+                .build();
     }
 }
