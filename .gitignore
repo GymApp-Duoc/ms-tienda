@@ -37,4 +37,4 @@ build/
 
 # IMPORTANTE: Ignorar application.properties para no subir la contraseña ni el secreto JWT a GitHub
 src/main/resources/application.properties
->>>>>>> ba6528f (feat: estructura ms-clases con seguridad jwt y flyway)
+>>>>>>> ba6528f (feat: estructura ms-tienda con seguridad jwt y flyway)
