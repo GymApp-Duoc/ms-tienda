@@ -4,7 +4,8 @@ CREATE TABLE productos (
                            descripcion TEXT,
                            precio DECIMAL(10,2) NOT NULL,
                            stock INT NOT NULL DEFAULT 0,
-                           categoria VARCHAR(50)
+                           categoria VARCHAR(50),
+                           activo TINYINT(1) NOT NULL DEFAULT 1
 );
 
 CREATE TABLE ventas (

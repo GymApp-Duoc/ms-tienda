@@ -34,6 +34,13 @@ public class TiendaController {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.procesarVenta(request));
     }
 
+
+    @PostMapping("/productos")
+    public ResponseEntity<Producto> crearProducto(@Valid @RequestBody Producto producto) {
+        log.info("Petición REST: Crear nuevo producto '{}'", producto.getNombre());
+        return ResponseEntity.status(HttpStatus.CREATED).body(service.guardarProducto(producto));
+    }
+
     @GetMapping("/historial/{miembroId}")
     public ResponseEntity<List<Venta>> verHistorial(@PathVariable Long miembroId) {
         log.info("Petición REST: Consultar historial para miembro {}", miembroId);
@@ -53,4 +60,5 @@ public class TiendaController {
         service.reponerStock(id, cantidad);
         return ResponseEntity.ok().build();
     }
+
 }

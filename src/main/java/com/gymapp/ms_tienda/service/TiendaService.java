@@ -11,7 +11,7 @@ public interface TiendaService {
     List<Venta> obtenerHistorial(Long miembroId);
     void eliminarProducto(Long id);
 
-    // Nuevos métodos para desacoplar el controlador
     List<Producto> listarProductosActivos();
     void reponerStock(Long id, int cantidad);
+    Producto guardarProducto(Producto producto);
 }

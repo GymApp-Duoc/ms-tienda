@@ -30,7 +30,6 @@ public class TiendaServiceImpl implements TiendaService {
     private final ProductoRepository productoRepo;
     private final VentaRepository ventaRepo;
 
-
     private final MiembroClient miembroClient;
     private final GamificacionClient gamificacionClient;
     private final NotificacionClient notificacionClient;
@@ -52,14 +51,12 @@ public class TiendaServiceImpl implements TiendaService {
 
         BigDecimal total = producto.getPrecio().multiply(BigDecimal.valueOf(dto.getCantidad()));
 
-
         producto.setStock(producto.getStock() - dto.getCantidad());
         productoRepo.save(producto);
 
         Venta venta = new Venta(null, producto.getId(), dto.getMiembroId(),
                 dto.getCantidad(), total, LocalDateTime.now());
         Venta guardada = ventaRepo.save(venta);
-
 
         notificarSistemasExternos(dto.getMiembroId(), producto.getNombre());
 
@@ -93,12 +90,10 @@ public class TiendaServiceImpl implements TiendaService {
                 .orElseThrow(() -> new BusinessException("Producto no encontrado para eliminar."));
 
         if (!ventaRepo.findByProductoId(id).isEmpty()) {
-
             p.setActivo(false);
             productoRepo.save(p);
             log.info("Producto ID {} desactivado (borrado lógico) debido a historial de ventas existente.", id);
         } else {
-
             productoRepo.delete(p);
             log.info("Producto ID {} eliminado físicamente del sistema.", id);
         }
@@ -110,8 +105,6 @@ public class TiendaServiceImpl implements TiendaService {
         log.info("Consultando historial de ventas para el miembro ID: {}", miembroId);
         return ventaRepo.findByMiembroIdOrderByFechaVentaDesc(miembroId);
     }
-
-
 
     private void validarMiembroExterno(Long id) {
         try {
@@ -126,7 +119,6 @@ public class TiendaServiceImpl implements TiendaService {
     }
 
     private void notificarSistemasExternos(Long miembroId, String nombreProducto) {
-
         try {
             Map<String, Object> evento = new HashMap<>();
             evento.put("miembroId", miembroId);
@@ -137,7 +129,6 @@ public class TiendaServiceImpl implements TiendaService {
         } catch (Exception e) {
             log.warn("No se pudieron otorgar puntos al miembro {}: {}", miembroId, e.getMessage());
         }
-
 
         try {
             Map<String, Object> noti = new HashMap<>();
@@ -160,5 +151,14 @@ public class TiendaServiceImpl implements TiendaService {
                 .total(v.getTotal())
                 .fechaVenta(v.getFechaVenta())
                 .build();
+    }
+
+
+    @Override
+    @Transactional
+    public Producto guardarProducto(Producto producto) {
+        producto.setActivo(true);
+        log.info("Guardando nuevo producto en catálogo: {}", producto.getNombre());
+        return productoRepo.save(producto);
     }
 }
