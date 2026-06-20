@@ -17,6 +17,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -29,7 +30,6 @@ public class TiendaServiceImpl implements TiendaService {
 
     private final ProductoRepository productoRepo;
     private final VentaRepository ventaRepo;
-
 
     private final MiembroClient miembroClient;
     private final GamificacionClient gamificacionClient;
@@ -52,14 +52,12 @@ public class TiendaServiceImpl implements TiendaService {
 
         BigDecimal total = producto.getPrecio().multiply(BigDecimal.valueOf(dto.getCantidad()));
 
-
         producto.setStock(producto.getStock() - dto.getCantidad());
         productoRepo.save(producto);
 
         Venta venta = new Venta(null, producto.getId(), dto.getMiembroId(),
                 dto.getCantidad(), total, LocalDateTime.now());
         Venta guardada = ventaRepo.save(venta);
-
 
         notificarSistemasExternos(dto.getMiembroId(), producto.getNombre());
 
@@ -93,12 +91,10 @@ public class TiendaServiceImpl implements TiendaService {
                 .orElseThrow(() -> new BusinessException("Producto no encontrado para eliminar."));
 
         if (!ventaRepo.findByProductoId(id).isEmpty()) {
-
             p.setActivo(false);
             productoRepo.save(p);
             log.info("Producto ID {} desactivado (borrado lógico) debido a historial de ventas existente.", id);
         } else {
-
             productoRepo.delete(p);
             log.info("Producto ID {} eliminado físicamente del sistema.", id);
         }
@@ -111,7 +107,13 @@ public class TiendaServiceImpl implements TiendaService {
         return ventaRepo.findByMiembroIdOrderByFechaVentaDesc(miembroId);
     }
 
-
+    @Override
+    @Transactional
+    public Producto guardarProducto(Producto producto) {
+        producto.setActivo(true);
+        log.info("Guardando nuevo producto en catálogo: {}", producto.getNombre());
+        return productoRepo.save(producto);
+    }
 
     private void validarMiembroExterno(Long id) {
         try {
@@ -126,7 +128,6 @@ public class TiendaServiceImpl implements TiendaService {
     }
 
     private void notificarSistemasExternos(Long miembroId, String nombreProducto) {
-
         try {
             Map<String, Object> evento = new HashMap<>();
             evento.put("miembroId", miembroId);
@@ -137,7 +138,6 @@ public class TiendaServiceImpl implements TiendaService {
         } catch (Exception e) {
             log.warn("No se pudieron otorgar puntos al miembro {}: {}", miembroId, e.getMessage());
         }
-
 
         try {
             Map<String, Object> noti = new HashMap<>();
@@ -160,5 +160,47 @@ public class TiendaServiceImpl implements TiendaService {
                 .total(v.getTotal())
                 .fechaVenta(v.getFechaVenta())
                 .build();
+    }
+
+
+    // IMPLEMENTACIÓN DE LOS 5 REPORTES
+
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Venta> reporteMiembroPorFecha(Long miembroId, LocalDate fecha) {
+        log.info("Reporte 1: Ventas del miembro {} en la fecha {}", miembroId, fecha);
+        LocalDateTime inicioDia = fecha.atStartOfDay();
+        LocalDateTime finDia = fecha.atTime(23, 59, 59);
+        return ventaRepo.findByMiembroIdAndFechaVentaBetween(miembroId, inicioDia, finDia);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Venta> reporteVentasPorProducto(Long productoId) {
+        log.info("Reporte 2: Historial de ventas del producto {}", productoId);
+        return ventaRepo.findByProductoId(productoId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Venta> reporteMiembroEntreFechas(Long miembroId, LocalDate inicio, LocalDate fin) {
+        log.info("Reporte 3: Ventas del miembro {} entre {} y {}", miembroId, inicio, fin);
+        return ventaRepo.findByMiembroIdAndFechaVentaBetween(miembroId, inicio.atStartOfDay(), fin.atTime(23, 59, 59));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Venta> reporteProductoEntreFechas(Long productoId, LocalDate inicio, LocalDate fin) {
+        log.info("Reporte 4: Ventas del producto {} entre {} y {}", productoId, inicio, fin);
+        return ventaRepo.findByProductoIdAndFechaVentaBetween(productoId, inicio.atStartOfDay(), fin.atTime(23, 59, 59));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Integer reporteTotalUnidadesVendidas(Long productoId) {
+        log.info("Reporte 5: Calculando total de unidades vendidas para producto {}", productoId);
+        Integer total = ventaRepo.sumarUnidadesVendidasPorProducto(productoId);
+        return total != null ? total : 0;
     }
 }

@@ -1,0 +1,36 @@
+spring:
+  application:
+    name: ms-tienda
+  datasource:
+    url: jdbc:mysql://localhost:3306/db_gym_tienda?createDatabaseIfNotExist=true&serverTimezone=UTC
+    username: root
+    password: ${DB_PASSWORD:Duoc.2026}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+    database-platform: org.hibernate.dialect.MySQLDialect
+    show-sql: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: ${SERVER_PORT:8088}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+  instance:
+    prefer-ip-address: true
+
+jwt:
+  secret: ${JWT_SECRET:TXV5TGdyYVNlZ3VyYVBhcmFHeW1TeW5jMjAyNkNvbnRyYXNlbmE=}
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+    path: /doc/swagger-ui.html
