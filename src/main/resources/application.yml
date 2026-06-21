@@ -1,32 +1,37 @@
+server:
+  port: ${SERVER_PORT:8088}
+
 spring:
   application:
     name: ms-tienda
   datasource:
-    url: jdbc:mysql://localhost:3306/db_gym_tienda?createDatabaseIfNotExist=true&serverTimezone=UTC
+
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://host.docker.internal:3307/db_gym_tienda?createDatabaseIfNotExist=true&serverTimezone=UTC}
     username: root
-    password: ${DB_PASSWORD:Duoc.2026}
+
+    password: ${SPRING_DATASOURCE_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
-      ddl-auto: none
+
+      ddl-auto: update
     database-platform: org.hibernate.dialect.MySQLDialect
     show-sql: true
   flyway:
     enabled: true
     locations: classpath:db/migration
 
-server:
-  port: ${SERVER_PORT:8088}
+jwt:
+  secret: ${JWT_SECRET:TXV5TGdyYVNlZ3VyYVBhcmFHeW1TeW5jMjAyNkNvbnRyYXNlbmE=}
 
 eureka:
   client:
     service-url:
-      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+      defaultZone: ${EUREKA_URL:http://host.docker.internal:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
   instance:
     prefer-ip-address: true
-
-jwt:
-  secret: ${JWT_SECRET:TXV5TGdyYVNlZ3VyYVBhcmFHeW1TeW5jMjAyNkNvbnRyYXNlbmE=}
 
 springdoc:
   api-docs:
